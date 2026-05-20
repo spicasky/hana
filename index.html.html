@@ -1,0 +1,1119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>균형 검사 데이터 앱 - Pose 인식 버전</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0;}
+    :root{
+      --bg:#0b1220; --bg2:#0f1a30; --card:#13203a; --line:#26365a;
+      --text:#e8eef9; --muted:#93a4c3;
+      --accent:#0ea5e9; --accent2:#38d6f0;
+      --good:#34d399; --ok:#fbbf24; --warn:#f87171;
+    }
+    html,body{height:100%;}
+    body{
+      background:radial-gradient(1100px 560px at 50% -8%, #18294a, var(--bg)) fixed;
+      color:var(--text);
+      font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic","Noto Sans KR",sans-serif;
+      -webkit-text-size-adjust:100%;
+      display:flex;justify-content:center;
+      padding:env(safe-area-inset-top) 14px calc(env(safe-area-inset-bottom) + 24px);
+    }
+    #app{width:100%;max-width:460px;padding-top:20px;}
+    header{text-align:center;margin-bottom:14px;}
+    header h1{font-size:1.45rem;letter-spacing:-.02em;}
+    header .sub{margin-top:5px;color:var(--muted);font-size:.85rem;line-height:1.45;}
+    .card{
+      background:var(--card);border:1px solid var(--line);
+      border-radius:16px;padding:16px;margin-bottom:15px;
+    }
+    .card h2{font-size:1rem;margin-bottom:12px;letter-spacing:-.02em;}
+    .form-grid{display:grid;gap:11px;}
+    .field label{display:block;font-size:.78rem;color:var(--muted);margin-bottom:6px;}
+    .field input,.field select,.field textarea{
+      width:100%;padding:13px 12px;border-radius:12px;border:1px solid var(--line);
+      background:var(--bg2);color:var(--text);font-size:.95rem;font-family:inherit;outline:none;
+    }
+    .field textarea{min-height:72px;resize:vertical;line-height:1.45;}
+    .field input:focus,.field select:focus,.field textarea:focus{
+      border-color:var(--accent);box-shadow:0 0 0 3px rgba(14,165,233,.16);
+    }
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+    .check{display:flex;align-items:flex-start;gap:9px;margin-top:12px;color:var(--muted);font-size:.8rem;line-height:1.45;}
+    .check input{margin-top:3px;accent-color:var(--accent);}
+    .actions{display:flex;gap:8px;margin-top:13px;}
+    .small-btn{
+      flex:1;padding:12px;border:0;border-radius:12px;font-size:.9rem;font-weight:700;
+      font-family:inherit;cursor:pointer;color:#04121e;
+      background:linear-gradient(135deg,var(--accent2),var(--accent));
+    }
+    .small-btn.ghost{color:var(--text);background:var(--bg2);border:1px solid var(--line);}
+    .small-btn.danger{color:var(--warn);background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.36);}
+    .status{margin-top:10px;font-size:.8rem;color:var(--muted);line-height:1.5;}
+    .status.ok{color:var(--good);}
+    .status.warn{color:var(--ok);}
+    .status.error{color:var(--warn);}
+    #stage{
+      position:relative;width:100%;aspect-ratio:3/4;
+      background:#05080f;border:1px solid var(--line);border-radius:18px;overflow:hidden;
+    }
+    #video,#overlay{position:absolute;inset:0;width:100%;height:100%;}
+    #video{object-fit:cover;background:#05080f;transform:scaleX(-1);}
+    #overlay{pointer-events:none;}
+    #timer{
+      position:absolute;top:12px;left:50%;transform:translateX(-50%);
+      display:flex;align-items:baseline;gap:6px;
+      background:rgba(6,11,22,.76);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+      padding:6px 18px;border-radius:999px;border:1px solid var(--line);
+    }
+    #timer b{font-size:1.8rem;font-variant-numeric:tabular-nums;}
+    #timer span{font-size:.78rem;color:var(--muted);}
+    #countdown{
+      position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
+      font-size:7.5rem;font-weight:800;color:#fff;
+      background:rgba(5,9,18,.45);text-shadow:0 6px 34px rgba(0,0,0,.7);
+    }
+    #sway{
+      position:absolute;left:14px;right:14px;bottom:13px;
+      display:flex;align-items:center;gap:10px;
+      background:rgba(6,11,22,.8);border:1px solid var(--line);
+      padding:8px 13px;border-radius:13px;
+    }
+    #sway i{font-style:normal;font-size:.74rem;color:var(--muted);white-space:nowrap;}
+    #sway .bar{flex:1;height:9px;background:#1c2a47;border-radius:6px;overflow:hidden;}
+    #sway-fill{height:100%;width:0%;background:var(--good);border-radius:6px;transition:width .12s linear, background .2s;}
+    #banner{
+      position:absolute;left:12px;right:12px;bottom:13px;
+      text-align:center;font-size:.92rem;font-weight:600;line-height:1.45;
+      background:rgba(6,11,22,.84);border:1px solid var(--line);
+      padding:11px 12px;border-radius:13px;
+    }
+    #banner b{color:var(--accent2);}
+    #banner.ready{color:var(--accent2);}
+    #banner.warn{color:var(--ok);}
+    #banner.error{color:var(--warn);}
+    #pose-badges{
+      position:absolute;left:12px;top:12px;display:grid;gap:7px;z-index:3;
+    }
+    .badge{
+      width:max-content;max-width:260px;
+      background:rgba(6,11,22,.76);border:1px solid var(--line);
+      border-radius:999px;padding:6px 10px;font-size:.74rem;color:var(--muted);
+      -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+    }
+    .badge.ok{color:var(--good);border-color:rgba(52,211,153,.45);}
+    .badge.warn{color:var(--ok);border-color:rgba(251,191,36,.45);}
+    .badge.error{color:var(--warn);border-color:rgba(248,113,113,.45);}
+    #controls{margin-top:15px;}
+    .btn{
+      display:block;width:100%;padding:16px;border:0;border-radius:14px;
+      font-size:1.06rem;font-weight:700;color:#04121e;cursor:pointer;font-family:inherit;
+      background:linear-gradient(135deg,var(--accent2),var(--accent));
+      box-shadow:0 8px 22px -10px var(--accent);
+    }
+    .btn.secondary{margin-top:10px;color:var(--text);background:var(--card);border:1px solid var(--line);box-shadow:none;}
+    .btn:disabled{opacity:.5;cursor:default;box-shadow:none;}
+    .btn:active:not(:disabled){transform:translateY(1px);}
+    #sens{margin-top:13px;display:flex;align-items:center;justify-content:space-between;gap:10px;}
+    #sens>span{font-size:.84rem;color:var(--muted);}
+    .seg{display:flex;background:var(--card);border:1px solid var(--line);border-radius:11px;overflow:hidden;}
+    .seg button{padding:9px 15px;border:0;background:transparent;color:var(--muted);font-size:.85rem;font-family:inherit;cursor:pointer;}
+    .seg button.on{background:var(--accent);color:#04121e;font-weight:700;}
+    #result{
+      margin-top:15px;background:var(--card);border:1px solid var(--line);
+      border-radius:16px;padding:18px 16px;text-align:center;
+    }
+    #grade{display:inline-block;font-size:1.45rem;font-weight:800;padding:5px 24px;border-radius:999px;margin-bottom:15px;}
+    #grade.good{background:rgba(52,211,153,.16);color:var(--good);}
+    #grade.ok{background:rgba(251,191,36,.16);color:var(--ok);}
+    #grade.warn{background:rgba(248,113,113,.16);color:var(--warn);}
+    .cells{display:flex;gap:9px;}
+    .cell{flex:1;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:13px 4px;}
+    .cell span{display:block;font-size:.72rem;color:var(--muted);margin-bottom:6px;}
+    .cell b{font-size:1.1rem;font-variant-numeric:tabular-nums;}
+    #r-msg{margin-top:14px;font-size:.9rem;color:var(--muted);line-height:1.55;}
+    #records{margin-top:15px;}
+    #record-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px;}
+    #record-summary b{font-size:.95rem;}
+    #record-summary span{color:var(--muted);font-size:.78rem;}
+    .table-wrap{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:12px;background:var(--bg2);}
+    table{width:100%;border-collapse:collapse;min-width:760px;}
+    th,td{padding:10px 9px;border-bottom:1px solid var(--line);font-size:.78rem;text-align:left;white-space:nowrap;}
+    th{position:sticky;top:0;background:#172640;color:var(--muted);font-weight:600;}
+    tr:last-child td{border-bottom:0;}
+    #guide{margin-top:16px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:2px 15px;}
+    #guide summary{padding:11px 0;font-size:.92rem;font-weight:600;cursor:pointer;}
+    #guide ol,#guide ul{margin:4px 4px 14px 20px;color:var(--muted);font-size:.86rem;line-height:1.75;}
+    #guide li{margin-bottom:3px;}
+    #guide b{color:var(--text);}
+    footer{margin-top:18px;text-align:center;color:#62748f;font-size:.74rem;line-height:1.8;}
+    .hidden{display:none !important;}
+    @media (min-width:560px){
+      #app{padding-top:30px;}
+      header h1{font-size:1.6rem;}
+    }
+  </style>
+</head>
+<body>
+  <main id="app">
+    <header>
+      <h1>균형 검사 데이터 앱</h1>
+      <p class="sub">MediaPipe Pose로 코·눈·입·관절을 인식하는 버전</p>
+    </header>
+
+    <section class="card" id="subject-card">
+      <h2>대상자 정보</h2>
+      <div class="form-grid">
+        <div class="field">
+          <label for="person-name">이름</label>
+          <input id="person-name" type="text" placeholder="예: 홍길동" autocomplete="off">
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="person-gender">성별</label>
+            <select id="person-gender">
+              <option value="">선택</option>
+              <option value="남">남</option>
+              <option value="여">여</option>
+              <option value="기타">기타</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="person-birth">생년월일</label>
+            <input id="person-birth" type="date">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="standing-leg">선 다리</label>
+            <select id="standing-leg">
+              <option value="왼발">왼발</option>
+              <option value="오른발">오른발</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="tester">검사자</label>
+            <input id="tester" type="text" placeholder="선택 입력">
+          </div>
+        </div>
+        <div class="field">
+          <label for="memo">메모</label>
+          <textarea id="memo" placeholder="선택 입력"></textarea>
+        </div>
+      </div>
+
+      <label class="check">
+        <input id="privacy-ok" type="checkbox">
+        <span>대상자 정보가 이 기기 브라우저에 저장되는 것에 동의합니다. 서버로 전송하지 않습니다.</span>
+      </label>
+
+      <div class="actions">
+        <button type="button" class="small-btn" id="save-subject">정보 저장</button>
+        <button type="button" class="small-btn ghost" id="clear-subject">초기화</button>
+      </div>
+      <p id="subject-status" class="status">대상자 정보를 입력하고 저장하면 검사 결과와 함께 기록됩니다.</p>
+    </section>
+
+    <section id="stage" aria-label="균형 검사 화면">
+      <video id="video" playsinline muted></video>
+      <canvas id="overlay"></canvas>
+
+      <div id="pose-badges">
+        <div id="model-badge" class="badge warn">모델 대기</div>
+        <div id="face-badge" class="badge">얼굴 인식 대기</div>
+        <div id="body-badge" class="badge">신체 인식 대기</div>
+      </div>
+
+      <div id="timer">
+        <b id="time">0.0</b><span>초</span>
+      </div>
+
+      <div id="countdown" class="hidden">3</div>
+
+      <div id="sway" class="hidden">
+        <i>중심 흔들림</i>
+        <div class="bar"><div id="sway-fill"></div></div>
+      </div>
+
+      <div id="banner">
+        카메라 권한을 허용한 뒤 <b>인식 시작</b>을 눌러주세요.
+      </div>
+    </section>
+
+    <section id="controls">
+      <button id="start" class="btn">카메라 켜고 인식 시작</button>
+      <button id="test" class="btn secondary" disabled>검사 시작</button>
+
+      <div id="sens">
+        <span>민감도</span>
+        <div class="seg" role="group" aria-label="민감도 선택">
+          <button type="button" data-sens="low">낮음</button>
+          <button type="button" class="on" data-sens="normal">보통</button>
+          <button type="button" data-sens="high">높음</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="result" class="hidden">
+      <div id="grade" class="ok">측정 완료</div>
+      <div class="cells">
+        <div class="cell"><span>버틴 시간</span><b id="r-time">0.0초</b></div>
+        <div class="cell"><span>안정성 점수</span><b id="r-score">0점</b></div>
+        <div class="cell"><span>중심 흔들림</span><b id="r-sway">0</b></div>
+      </div>
+      <p id="r-msg">결과가 저장되었습니다.</p>
+      <div class="actions">
+        <button type="button" class="small-btn" id="save-again">현재 결과 다시 저장</button>
+      </div>
+    </section>
+
+    <section class="card" id="records">
+      <div id="record-summary">
+        <b>검사 기록</b>
+        <span id="record-count">0건</span>
+      </div>
+      <div class="actions">
+        <button type="button" class="small-btn" id="download-csv">CSV 다운로드</button>
+        <button type="button" class="small-btn ghost" id="download-json">JSON 다운로드</button>
+      </div>
+      <div class="actions">
+        <button type="button" class="small-btn danger" id="clear-records">전체 기록 삭제</button>
+      </div>
+      <div class="table-wrap" style="margin-top:12px;">
+        <table>
+          <thead>
+            <tr>
+              <th>검사일시</th><th>이름</th><th>성별</th><th>생년월일</th><th>만나이</th>
+              <th>선 다리</th><th>시간</th><th>점수</th><th>흔들림</th><th>인식률</th><th>검사자</th><th>메모</th>
+            </tr>
+          </thead>
+          <tbody id="record-body">
+            <tr><td colspan="12">저장된 기록이 없습니다.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <details id="guide" open>
+      <summary>사용 방법 및 인식 조건</summary>
+      <ol>
+        <li>대상자 정보를 입력하고 개인정보 저장 동의를 체크합니다.</li>
+        <li><b>카메라 켜고 인식 시작</b>을 누른 뒤, 머리부터 발까지 보이게 뒤로 섭니다.</li>
+        <li>앱은 코·눈·입, 어깨, 골반, 무릎, 발목 포인트를 확인합니다.</li>
+        <li>얼굴과 신체 배지가 초록색이 되면 <b>검사 시작</b>을 누릅니다.</li>
+        <li>한 발로 서면 골반 중심점의 이동량으로 중심 흔들림을 계산합니다.</li>
+      </ol>
+      <ul>
+        <li>의학적 진단용이 아니라 기록·선별용입니다.</li>
+        <li>카메라 영상은 서버에 저장하지 않고, 기록만 현재 브라우저 localStorage에 저장합니다.</li>
+      </ul>
+    </details>
+
+    <footer>
+      영상은 브라우저에서만 분석됩니다.<br>
+      © Balance Pose Data App
+    </footer>
+  </main>
+
+  <script type="module">
+    import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/vision_bundle.mjs";
+
+    const MAX_SECONDS = 10;
+    const SUBJECT_KEY = "balance_pose_subject_v2";
+    const RECORD_KEY = "balance_pose_records_v2";
+
+    const $ = (id) => document.getElementById(id);
+
+    const video = $("video");
+    const overlay = $("overlay");
+    const ctx = overlay.getContext("2d");
+
+    const startBtn = $("start");
+    const testBtn = $("test");
+    const countdown = $("countdown");
+    const banner = $("banner");
+    const swayBox = $("sway");
+    const swayFill = $("sway-fill");
+    const timeEl = $("time");
+    const modelBadge = $("model-badge");
+    const faceBadge = $("face-badge");
+    const bodyBadge = $("body-badge");
+
+    const resultEl = $("result");
+    const gradeEl = $("grade");
+    const rTime = $("r-time");
+    const rScore = $("r-score");
+    const rSway = $("r-sway");
+    const rMsg = $("r-msg");
+
+    const nameInput = $("person-name");
+    const genderInput = $("person-gender");
+    const birthInput = $("person-birth");
+    const legInput = $("standing-leg");
+    const testerInput = $("tester");
+    const memoInput = $("memo");
+    const privacyInput = $("privacy-ok");
+    const subjectStatus = $("subject-status");
+
+    const saveSubjectBtn = $("save-subject");
+    const clearSubjectBtn = $("clear-subject");
+    const saveAgainBtn = $("save-again");
+    const downloadCsvBtn = $("download-csv");
+    const downloadJsonBtn = $("download-json");
+    const clearRecordsBtn = $("clear-records");
+    const recordCount = $("record-count");
+    const recordBody = $("record-body");
+
+    const LM = {
+      nose:0, leftEyeInner:1, leftEye:2, leftEyeOuter:3, rightEyeInner:4, rightEye:5, rightEyeOuter:6,
+      leftEar:7, rightEar:8, mouthLeft:9, mouthRight:10,
+      leftShoulder:11, rightShoulder:12, leftElbow:13, rightElbow:14, leftWrist:15, rightWrist:16,
+      leftPinky:17, rightPinky:18, leftIndex:19, rightIndex:20, leftThumb:21, rightThumb:22,
+      leftHip:23, rightHip:24, leftKnee:25, rightKnee:26, leftAnkle:27, rightAnkle:28,
+      leftHeel:29, rightHeel:30, leftFootIndex:31, rightFootIndex:32
+    };
+
+    const faceIdx = [0,1,2,3,4,5,6,9,10];
+    const bodyRequiredIdx = [11,12,23,24,25,26,27,28];
+    const allBodyIdx = [11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32];
+
+    const connections = [
+      [0,1],[1,2],[2,3],[0,4],[4,5],[5,6],[9,10],
+      [11,12],[11,13],[13,15],[15,17],[15,19],[15,21],[17,19],
+      [12,14],[14,16],[16,18],[16,20],[16,22],[18,20],
+      [11,23],[12,24],[23,24],
+      [23,25],[25,27],[27,29],[29,31],[27,31],
+      [24,26],[26,28],[28,30],[30,32],[28,32]
+    ];
+
+    const labels = {
+      0:"코",1:"눈",2:"눈",3:"눈",4:"눈",5:"눈",6:"눈",9:"입",10:"입",
+      11:"어깨",12:"어깨",23:"골반",24:"골반",25:"무릎",26:"무릎",27:"발목",28:"발목"
+    };
+
+    const sensConfig = {
+      low: { label:"낮음", swayWarn:28, swayFail:48 },
+      normal: { label:"보통", swayWarn:22, swayFail:38 },
+      high: { label:"높음", swayWarn:17, swayFail:30 }
+    };
+
+    let poseLandmarker = null;
+    let stream = null;
+    let phase = "idle";
+    let sensitivity = "normal";
+    let rafId = 0;
+    let lastPose = null;
+    let lastVideoTime = -1;
+    let poseReady = false;
+    let startTime = 0;
+    let baselineHip = null;
+    let swaySamples = [];
+    let visibilitySamples = [];
+    let stopStreak = 0;
+    let lastResult = null;
+
+    function readJSON(key, fallback) {
+      try { return JSON.parse(localStorage.getItem(key)) ?? fallback; }
+      catch { return fallback; }
+    }
+
+    function writeJSON(key, value) {
+      localStorage.setItem(key, JSON.stringify(value));
+    }
+
+    function calcAge(birthDate) {
+      if (!birthDate) return "";
+      const today = new Date();
+      const birth = new Date(birthDate);
+      if (Number.isNaN(birth.getTime())) return "";
+      let age = today.getFullYear() - birth.getFullYear();
+      const m = today.getMonth() - birth.getMonth();
+      if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
+      return age;
+    }
+
+    function collectSubject() {
+      return {
+        name: nameInput.value.trim(),
+        gender: genderInput.value,
+        birthDate: birthInput.value,
+        age: calcAge(birthInput.value),
+        privacyOk: privacyInput.checked
+      };
+    }
+
+    function validateSubject(showAlert = true) {
+      const s = collectSubject();
+      let msg = "";
+      if (!s.name) msg = "이름을 입력해주세요.";
+      else if (!s.gender) msg = "성별을 선택해주세요.";
+      else if (!s.birthDate) msg = "생년월일을 입력해주세요.";
+      else if (!s.privacyOk) msg = "개인정보 저장 동의가 필요합니다.";
+      if (msg && showAlert) alert(msg);
+      return msg ? null : s;
+    }
+
+    function saveSubject() {
+      const subject = validateSubject(true);
+      if (!subject) return false;
+      writeJSON(SUBJECT_KEY, subject);
+      subjectStatus.textContent = `${subject.name} 대상자 정보가 저장되었습니다.`;
+      subjectStatus.className = "status ok";
+      return true;
+    }
+
+    function loadSubject() {
+      const s = readJSON(SUBJECT_KEY, null);
+      if (!s) return;
+      nameInput.value = s.name || "";
+      genderInput.value = s.gender || "";
+      birthInput.value = s.birthDate || "";
+      privacyInput.checked = Boolean(s.privacyOk);
+      subjectStatus.textContent = `${s.name} 대상자 정보가 저장되어 있습니다.`;
+      subjectStatus.className = "status ok";
+    }
+
+    function clearSubject() {
+      localStorage.removeItem(SUBJECT_KEY);
+      nameInput.value = "";
+      genderInput.value = "";
+      birthInput.value = "";
+      privacyInput.checked = false;
+      subjectStatus.textContent = "대상자 정보를 입력하고 저장하면 검사 결과와 함께 기록됩니다.";
+      subjectStatus.className = "status";
+    }
+
+    function getRecords() {
+      return readJSON(RECORD_KEY, []);
+    }
+
+    function setRecords(records) {
+      writeJSON(RECORD_KEY, records);
+      renderRecords();
+    }
+
+    function formatDate(date = new Date()) {
+      const pad = (n) => String(n).padStart(2, "0");
+      return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+    }
+
+    function escapeHTML(v) {
+      return String(v ?? "").replace(/[&<>"']/g, (ch) => ({
+        "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+      }[ch]));
+    }
+
+    function renderRecords() {
+      const records = getRecords();
+      recordCount.textContent = `${records.length}건`;
+      if (!records.length) {
+        recordBody.innerHTML = `<tr><td colspan="12">저장된 기록이 없습니다.</td></tr>`;
+        return;
+      }
+      recordBody.innerHTML = records.slice().reverse().map(r => `
+        <tr>
+          <td>${escapeHTML(r.testedAt)}</td>
+          <td>${escapeHTML(r.name)}</td>
+          <td>${escapeHTML(r.gender)}</td>
+          <td>${escapeHTML(r.birthDate)}</td>
+          <td>${escapeHTML(r.age)}</td>
+          <td>${escapeHTML(r.standingLeg)}</td>
+          <td>${escapeHTML(r.durationSec)}초</td>
+          <td>${escapeHTML(r.stabilityScore)}</td>
+          <td>${escapeHTML(r.avgSway)}</td>
+          <td>${escapeHTML(r.avgVisibility)}%</td>
+          <td>${escapeHTML(r.tester)}</td>
+          <td>${escapeHTML(r.memo)}</td>
+        </tr>
+      `).join("");
+    }
+
+    function saveRecord(result) {
+      const subject = validateSubject(true);
+      if (!subject) return null;
+      writeJSON(SUBJECT_KEY, subject);
+
+      const record = {
+        id: Date.now(),
+        testedAt: formatDate(),
+        name: subject.name,
+        gender: subject.gender,
+        birthDate: subject.birthDate,
+        age: calcAge(subject.birthDate),
+        standingLeg: legInput.value,
+        durationSec: result.durationSec,
+        stabilityScore: result.stabilityScore,
+        avgSway: result.avgSway,
+        avgVisibility: result.avgVisibility,
+        grade: result.grade,
+        sensitivity: sensConfig[sensitivity].label,
+        tester: testerInput.value.trim(),
+        memo: memoInput.value.trim()
+      };
+
+      const records = getRecords();
+      records.push(record);
+      setRecords(records);
+      subjectStatus.textContent = `${subject.name} 대상자 정보와 검사 기록이 저장되었습니다.`;
+      subjectStatus.className = "status ok";
+      return record;
+    }
+
+    function download(filename, text, type) {
+      const blob = new Blob([text], { type });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadCSV() {
+      const records = getRecords();
+      if (!records.length) return alert("다운로드할 기록이 없습니다.");
+      const headers = ["검사일시","이름","성별","생년월일","만나이","선 다리","측정시간초","안정성점수","중심흔들림","평균인식률","등급","민감도","검사자","메모"];
+      const rows = records.map(r => [
+        r.testedAt, r.name, r.gender, r.birthDate, r.age, r.standingLeg, r.durationSec,
+        r.stabilityScore, r.avgSway, r.avgVisibility, r.grade, r.sensitivity, r.tester, r.memo
+      ]);
+      const csv = [headers, ...rows]
+        .map(row => row.map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+      download(`균형검사_pose기록_${new Date().toISOString().slice(0,10)}.csv`, "\uFEFF" + csv, "text/csv;charset=utf-8");
+    }
+
+    function downloadJSON() {
+      const records = getRecords();
+      if (!records.length) return alert("다운로드할 기록이 없습니다.");
+      download(`균형검사_pose기록_${new Date().toISOString().slice(0,10)}.json`, JSON.stringify(records, null, 2), "application/json;charset=utf-8");
+    }
+
+    function setBadge(el, text, type="") {
+      el.textContent = text;
+      el.className = `badge ${type}`.trim();
+    }
+
+    async function initPoseModel() {
+      if (poseLandmarker) return true;
+      setBadge(modelBadge, "모델 불러오는 중", "warn");
+      banner.className = "warn";
+      banner.textContent = "신체 인식 모델을 불러오는 중입니다.";
+      try {
+        const vision = await FilesetResolver.forVisionTasks(
+          "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+        );
+        poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+          baseOptions: {
+            modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
+            delegate: "GPU"
+          },
+          runningMode: "VIDEO",
+          numPoses: 1,
+          minPoseDetectionConfidence: 0.5,
+          minPosePresenceConfidence: 0.5,
+          minTrackingConfidence: 0.5,
+          outputSegmentationMasks: false
+        });
+        setBadge(modelBadge, "모델 준비 완료", "ok");
+        return true;
+      } catch (gpuErr) {
+        try {
+          const vision = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+          );
+          poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/latest/pose_landmarker_full.task",
+              delegate: "CPU"
+            },
+            runningMode: "VIDEO",
+            numPoses: 1,
+            minPoseDetectionConfidence: 0.5,
+            minPosePresenceConfidence: 0.5,
+            minTrackingConfidence: 0.5,
+            outputSegmentationMasks: false
+          });
+          setBadge(modelBadge, "모델 준비 완료", "ok");
+          return true;
+        } catch (err) {
+          console.error(err);
+          setBadge(modelBadge, "모델 로드 실패", "error");
+          banner.className = "error";
+          banner.textContent = "모델을 불러오지 못했습니다. 인터넷 연결 또는 브라우저를 확인해주세요.";
+          return false;
+        }
+      }
+    }
+
+    async function ensureCamera() {
+      if (stream) return true;
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: "user", width: { ideal: 720 }, height: { ideal: 960 } },
+          audio: false
+        });
+        video.srcObject = stream;
+        await video.play();
+        resizeOverlay();
+        return true;
+      } catch (err) {
+        console.error(err);
+        banner.className = "error";
+        banner.textContent = "카메라 권한을 허용해야 인식을 시작할 수 있습니다.";
+        alert("카메라를 사용할 수 없습니다. 브라우저 권한을 확인해주세요.");
+        return false;
+      }
+    }
+
+    function resizeOverlay() {
+      const rect = overlay.getBoundingClientRect();
+      overlay.width = Math.max(1, Math.round(rect.width * devicePixelRatio));
+      overlay.height = Math.max(1, Math.round(rect.height * devicePixelRatio));
+      ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+    }
+
+    function lmVisible(lm, min = 0.45) {
+      if (!lm) return false;
+      const v = lm.visibility ?? lm.presence ?? 1;
+      return v >= min && lm.x >= -0.05 && lm.x <= 1.05 && lm.y >= -0.05 && lm.y <= 1.05;
+    }
+
+    function point(lm) {
+      const w = overlay.clientWidth;
+      const h = overlay.clientHeight;
+      return { x: (1 - lm.x) * w, y: lm.y * h };
+    }
+
+    function mid(a, b) {
+      return { x:(a.x + b.x) / 2, y:(a.y + b.y) / 2 };
+    }
+
+    function drawGuideText(text, color = "rgba(232,238,249,.88)") {
+      const w = overlay.clientWidth;
+      const h = overlay.clientHeight;
+      ctx.save();
+      ctx.fillStyle = color;
+      ctx.font = "13px -apple-system, BlinkMacSystemFont, sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText(text, w/2, h*.14);
+      ctx.restore();
+    }
+
+    function drawEmptyGuide() {
+      const w = overlay.clientWidth;
+      const h = overlay.clientHeight;
+      ctx.clearRect(0,0,w,h);
+      ctx.save();
+      ctx.strokeStyle = "rgba(56,214,240,.55)";
+      ctx.lineWidth = 2;
+      ctx.setLineDash([8,8]);
+      ctx.beginPath();
+      ctx.ellipse(w/2, h*.51, w*.25, h*.36, 0, 0, Math.PI*2);
+      ctx.stroke();
+      ctx.restore();
+      drawGuideText("머리부터 발까지 화면에 들어오게 서주세요");
+    }
+
+    function poseQuality(landmarks) {
+      if (!landmarks) {
+        return { faceCount:0, bodyCount:0, faceOk:false, bodyOk:false, fullOk:false, avgVisibility:0 };
+      }
+
+      const faceCount = faceIdx.filter(i => lmVisible(landmarks[i], 0.45)).length;
+      const bodyCount = bodyRequiredIdx.filter(i => lmVisible(landmarks[i], 0.45)).length;
+      const allCount = allBodyIdx.filter(i => lmVisible(landmarks[i], 0.35)).length;
+
+      const avgVisibility = [...faceIdx, ...allBodyIdx]
+        .map(i => landmarks[i]?.visibility ?? landmarks[i]?.presence ?? 0)
+        .reduce((a,b) => a+b, 0) / (faceIdx.length + allBodyIdx.length) * 100;
+
+      const faceOk = faceCount >= 6;
+      const bodyOk = bodyCount >= 7 && allCount >= 12;
+      const fullOk = faceOk && bodyOk;
+
+      return { faceCount, bodyCount, allCount, faceOk, bodyOk, fullOk, avgVisibility: Math.round(avgVisibility) };
+    }
+
+    function drawPose(landmarks) {
+      const w = overlay.clientWidth;
+      const h = overlay.clientHeight;
+      ctx.clearRect(0,0,w,h);
+
+      if (!landmarks) {
+        drawEmptyGuide();
+        return;
+      }
+
+      const q = poseQuality(landmarks);
+      ctx.save();
+
+      for (const [a,b] of connections) {
+        if (!lmVisible(landmarks[a], 0.25) || !lmVisible(landmarks[b], 0.25)) continue;
+        const pa = point(landmarks[a]);
+        const pb = point(landmarks[b]);
+        ctx.beginPath();
+        ctx.moveTo(pa.x, pa.y);
+        ctx.lineTo(pb.x, pb.y);
+        ctx.strokeStyle = a <= 10 || b <= 10 ? "rgba(56,214,240,.86)" : "rgba(52,211,153,.78)";
+        ctx.lineWidth = a <= 10 || b <= 10 ? 2.5 : 3.5;
+        ctx.stroke();
+      }
+
+      for (let i = 0; i < landmarks.length; i++) {
+        if (!lmVisible(landmarks[i], 0.25)) continue;
+        const p = point(landmarks[i]);
+        const isFace = i <= 10;
+        const isCore = [11,12,23,24,25,26,27,28].includes(i);
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, isCore ? 5 : isFace ? 4 : 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = isFace ? "rgba(56,214,240,.95)" : "rgba(52,211,153,.94)";
+        ctx.fill();
+        ctx.lineWidth = 1.5;
+        ctx.strokeStyle = "rgba(5,8,15,.72)";
+        ctx.stroke();
+
+        if (labels[i]) {
+          ctx.fillStyle = "rgba(232,238,249,.92)";
+          ctx.font = "11px -apple-system, BlinkMacSystemFont, sans-serif";
+          ctx.textAlign = "center";
+          ctx.fillText(labels[i], p.x, p.y - 8);
+        }
+      }
+
+      if (lmVisible(landmarks[LM.leftHip]) && lmVisible(landmarks[LM.rightHip])) {
+        const hip = mid(point(landmarks[LM.leftHip]), point(landmarks[LM.rightHip]));
+        ctx.beginPath();
+        ctx.arc(hip.x, hip.y, 8, 0, Math.PI*2);
+        ctx.fillStyle = "rgba(251,191,36,.96)";
+        ctx.fill();
+        ctx.strokeStyle = "rgba(5,8,15,.7)";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        if (baselineHip) {
+          ctx.beginPath();
+          ctx.arc(baselineHip.x, baselineHip.y, 7, 0, Math.PI*2);
+          ctx.strokeStyle = "rgba(248,113,113,.9)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(baselineHip.x, baselineHip.y);
+          ctx.lineTo(hip.x, hip.y);
+          ctx.strokeStyle = "rgba(248,113,113,.8)";
+          ctx.lineWidth = 2;
+          ctx.stroke();
+        }
+      }
+
+      ctx.restore();
+
+      if (!q.fullOk) {
+        drawGuideText("얼굴·어깨·골반·무릎·발목이 보이게 맞춰주세요", "rgba(251,191,36,.95)");
+      }
+    }
+
+    function updateBadges(q) {
+      if (!poseLandmarker) setBadge(modelBadge, "모델 대기", "warn");
+      else setBadge(modelBadge, "모델 준비 완료", "ok");
+
+      if (!lastPose) {
+        setBadge(faceBadge, "얼굴 인식 대기", "warn");
+        setBadge(bodyBadge, "신체 인식 대기", "warn");
+        return;
+      }
+
+      setBadge(faceBadge, `얼굴 ${q.faceCount}/9 · 코/눈/입`, q.faceOk ? "ok" : "warn");
+      setBadge(bodyBadge, `신체 ${q.bodyCount}/8 · 어깨/골반/무릎/발목`, q.bodyOk ? "ok" : "warn");
+    }
+
+    function getHipPoint(landmarks) {
+      if (!lmVisible(landmarks[LM.leftHip], 0.35) || !lmVisible(landmarks[LM.rightHip], 0.35)) return null;
+      return mid(point(landmarks[LM.leftHip]), point(landmarks[LM.rightHip]));
+    }
+
+    function getNormalizedSway(landmarks) {
+      const hip = getHipPoint(landmarks);
+      if (!hip || !baselineHip) return 0;
+
+      const shoulderOk = lmVisible(landmarks[LM.leftShoulder]) && lmVisible(landmarks[LM.rightShoulder]);
+      const hipOk = lmVisible(landmarks[LM.leftHip]) && lmVisible(landmarks[LM.rightHip]);
+      let bodyScale = overlay.clientHeight * 0.45;
+
+      if (shoulderOk && hipOk) {
+        const sh = mid(point(landmarks[LM.leftShoulder]), point(landmarks[LM.rightShoulder]));
+        bodyScale = Math.max(80, Math.hypot(sh.x - hip.x, sh.y - hip.y) * 2.8);
+      }
+
+      const pxDist = Math.hypot(hip.x - baselineHip.x, hip.y - baselineHip.y);
+      return Math.min(100, (pxDist / bodyScale) * 220);
+    }
+
+    function updateSwayBar(value) {
+      const pct = Math.min(100, Math.round(value));
+      swayFill.style.width = `${pct}%`;
+      if (pct < sensConfig[sensitivity].swayWarn) swayFill.style.background = "var(--good)";
+      else if (pct < sensConfig[sensitivity].swayFail) swayFill.style.background = "var(--ok)";
+      else swayFill.style.background = "var(--warn)";
+    }
+
+    function detectLoop() {
+      if (!poseLandmarker || !video.videoWidth) {
+        rafId = requestAnimationFrame(detectLoop);
+        return;
+      }
+
+      if (video.currentTime !== lastVideoTime) {
+        let result = null;
+        try {
+          result = poseLandmarker.detectForVideo(video, performance.now());
+        } catch (err) {
+          console.error(err);
+        }
+        lastVideoTime = video.currentTime;
+        lastPose = result?.landmarks?.[0] || null;
+      }
+
+      const q = poseQuality(lastPose);
+      poseReady = q.fullOk;
+      updateBadges(q);
+      drawPose(lastPose);
+
+      if (phase === "idle") {
+        if (poseReady) {
+          testBtn.disabled = false;
+          banner.className = "ready";
+          banner.innerHTML = "얼굴·신체 인식 완료. <b>검사 시작</b>을 눌러주세요.";
+        } else {
+          testBtn.disabled = true;
+          banner.className = "warn";
+          banner.textContent = "머리부터 발까지 보이도록 뒤로 서주세요.";
+        }
+      }
+
+      if (phase === "measuring") {
+        processMeasuring(q);
+      }
+
+      rafId = requestAnimationFrame(detectLoop);
+    }
+
+    function startCountdown() {
+      phase = "countdown";
+      testBtn.disabled = true;
+      startBtn.disabled = true;
+      resultEl.classList.add("hidden");
+      banner.classList.add("hidden");
+      countdown.classList.remove("hidden");
+      swayBox.classList.add("hidden");
+
+      let n = 3;
+      countdown.textContent = n;
+      const tick = () => {
+        n--;
+        if (n <= 0) {
+          countdown.textContent = "시작";
+          setTimeout(startMeasuring, 420);
+        } else {
+          countdown.textContent = n;
+          setTimeout(tick, 900);
+        }
+      };
+      setTimeout(tick, 900);
+    }
+
+    function startMeasuring() {
+      if (!lastPose || !poseReady) {
+        resetTest("신체 인식이 불안정합니다. 다시 맞춰주세요.");
+        return;
+      }
+
+      phase = "measuring";
+      startTime = performance.now();
+      baselineHip = getHipPoint(lastPose);
+      swaySamples = [];
+      visibilitySamples = [];
+      stopStreak = 0;
+      countdown.classList.add("hidden");
+      swayBox.classList.remove("hidden");
+      banner.className = "warn";
+      banner.textContent = "측정 중입니다. 한 발 자세를 유지하세요.";
+      banner.classList.remove("hidden");
+      testBtn.textContent = "측정 중...";
+      testBtn.disabled = true;
+      startBtn.disabled = true;
+    }
+
+    function processMeasuring(q) {
+      if (!lastPose) return;
+
+      const elapsed = (performance.now() - startTime) / 1000;
+      const sway = getNormalizedSway(lastPose);
+      const visibility = q.avgVisibility;
+
+      swaySamples.push(sway);
+      visibilitySamples.push(visibility);
+      updateSwayBar(sway);
+      timeEl.textContent = elapsed.toFixed(1);
+
+      const tooMuchSway = sway > sensConfig[sensitivity].swayFail;
+      const lostPose = !q.fullOk || visibility < 55;
+
+      if (tooMuchSway || lostPose) stopStreak++;
+      else stopStreak = Math.max(0, stopStreak - 1);
+
+      if (elapsed >= MAX_SECONDS) {
+        finishTest("max");
+        return;
+      }
+
+      if (elapsed > 2.5 && stopStreak >= 12) {
+        finishTest(lostPose ? "lost" : "sway");
+      }
+    }
+
+    function resetTest(message = "") {
+      phase = "idle";
+      baselineHip = null;
+      timeEl.textContent = "0.0";
+      updateSwayBar(0);
+      countdown.classList.add("hidden");
+      swayBox.classList.add("hidden");
+      startBtn.disabled = false;
+      testBtn.textContent = "검사 시작";
+      if (message) {
+        banner.className = "warn";
+        banner.textContent = message;
+        banner.classList.remove("hidden");
+      }
+    }
+
+    function finishTest(reason) {
+      const elapsed = Math.min(MAX_SECONDS, (performance.now() - startTime) / 1000);
+      const validSway = swaySamples.slice(8);
+      const validVisibility = visibilitySamples.slice(8);
+
+      const avgSway = validSway.length ? validSway.reduce((a,b)=>a+b,0) / validSway.length : 0;
+      const avgVisibility = validVisibility.length ? validVisibility.reduce((a,b)=>a+b,0) / validVisibility.length : 0;
+
+      const timeScore = Math.min(100, (elapsed / MAX_SECONDS) * 100);
+      const swayScore = Math.max(0, 100 - avgSway * 1.8);
+      const visibilityScore = Math.min(100, avgVisibility);
+      const stabilityScore = Math.max(0, Math.min(100, Math.round(timeScore * 0.52 + swayScore * 0.34 + visibilityScore * 0.14)));
+
+      let grade = "주의";
+      let gradeClass = "warn";
+      let msg = "중심 이동이 크거나 자세 인식이 불안정했습니다. 카메라 위치와 전신 노출을 확인해주세요.";
+
+      if (stabilityScore >= 80 && elapsed >= MAX_SECONDS * 0.67) {
+        grade = "양호";
+        gradeClass = "good";
+        msg = "균형 유지와 중심 안정성이 비교적 양호합니다.";
+      } else if (stabilityScore >= 55) {
+        grade = "보통";
+        gradeClass = "ok";
+        msg = "균형 유지는 가능하지만 중심 흔들림이 관찰됩니다.";
+      }
+
+      if (reason === "lost") msg = "얼굴 또는 신체 포인트가 사라져 측정을 종료했습니다. 전신이 화면 안에 오게 맞춰주세요.";
+      if (reason === "sway") msg = "골반 중심 이동이 커져 측정을 종료했습니다.";
+
+      lastResult = {
+        durationSec: Number(elapsed.toFixed(1)),
+        stabilityScore,
+        avgSway: Number(avgSway.toFixed(1)),
+        avgVisibility: Math.round(avgVisibility),
+        grade
+      };
+
+      gradeEl.textContent = grade;
+      gradeEl.className = gradeClass;
+      rTime.textContent = `${lastResult.durationSec.toFixed(1)}초`;
+      rScore.textContent = `${stabilityScore}점`;
+      rSway.textContent = `${lastResult.avgSway}`;
+      rMsg.textContent = msg;
+
+      const saved = saveRecord(lastResult);
+      if (saved) rMsg.textContent = `${msg} 기록이 자동 저장되었습니다.`;
+      else rMsg.textContent = `${msg} 대상자 정보를 저장하면 기록으로 남길 수 있습니다.`;
+
+      resultEl.classList.remove("hidden");
+      resetTest();
+    }
+
+    startBtn.addEventListener("click", async () => {
+      const okSubject = validateSubject(true);
+      if (!okSubject) return;
+      writeJSON(SUBJECT_KEY, okSubject);
+      startBtn.disabled = true;
+      const modelOk = await initPoseModel();
+      if (!modelOk) {
+        startBtn.disabled = false;
+        return;
+      }
+      const cameraOk = await ensureCamera();
+      if (!cameraOk) {
+        startBtn.disabled = false;
+        return;
+      }
+      startBtn.textContent = "인식 중";
+      startBtn.disabled = false;
+      banner.className = "warn";
+      banner.textContent = "사람을 찾는 중입니다. 머리부터 발까지 화면에 들어오게 서주세요.";
+      cancelAnimationFrame(rafId);
+      detectLoop();
+    });
+
+    testBtn.addEventListener("click", () => {
+      const okSubject = validateSubject(true);
+      if (!okSubject) return;
+      if (!poseReady) {
+        alert("얼굴과 신체가 모두 안정적으로 인식되어야 검사를 시작할 수 있습니다.");
+        return;
+      }
+      startCountdown();
+    });
+
+    saveSubjectBtn.addEventListener("click", saveSubject);
+    clearSubjectBtn.addEventListener("click", clearSubject);
+
+    saveAgainBtn.addEventListener("click", () => {
+      if (!lastResult) return alert("저장할 검사 결과가 없습니다.");
+      const record = saveRecord(lastResult);
+      if (record) alert("현재 결과를 한 번 더 저장했습니다.");
+    });
+
+    downloadCsvBtn.addEventListener("click", downloadCSV);
+    downloadJsonBtn.addEventListener("click", downloadJSON);
+    clearRecordsBtn.addEventListener("click", () => {
+      if (!confirm("저장된 검사 기록을 모두 삭제할까요?")) return;
+      localStorage.removeItem(RECORD_KEY);
+      renderRecords();
+    });
+
+    document.querySelectorAll("[data-sens]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        sensitivity = btn.dataset.sens;
+        document.querySelectorAll("[data-sens]").forEach(b => b.classList.toggle("on", b === btn));
+      });
+    });
+
+    window.addEventListener("resize", () => {
+      resizeOverlay();
+      drawPose(lastPose);
+    });
+
+    loadSubject();
+    renderRecords();
+    requestAnimationFrame(() => {
+      resizeOverlay();
+      drawEmptyGuide();
+    });
+  </script>
+</body>
+</html>
